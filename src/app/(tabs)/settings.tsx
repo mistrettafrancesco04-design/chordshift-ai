@@ -1,10 +1,11 @@
 import Constants from 'expo-constants';
 import { StyleSheet, Switch, View } from 'react-native';
 
-import { AppText, GlassCard, ListRow, Screen, SectionHeader, SegmentedControl } from '@/components/ui';
+import { AppText, FadeIn, GlassCard, ListRow, Screen, SectionHeader, SegmentedControl } from '@/components/ui';
 import type { AccidentalPreference, Notation } from '@/features/music';
 import { useSettingsStore } from '@/features/settings/settings-store';
 import { getSheetAnalyzer } from '@/features/transposer/services/analysis';
+import { confirm } from '@/lib/dialog';
 import { colors, spacing } from '@/theme';
 
 const NOTATION_OPTIONS = [
@@ -24,7 +25,9 @@ export default function SettingsScreen() {
 
   return (
     <Screen>
-      <SectionHeader overline="Optionen" title="Einstellungen" />
+      <FadeIn index={0}>
+        <SectionHeader overline="Optionen" title="Einstellungen" />
+      </FadeIn>
 
       <GlassCard>
         <View style={styles.group}>
@@ -80,11 +83,19 @@ export default function SettingsScreen() {
           </AppText>
           <ListRow
             icon="hardware-chip-outline"
-            title="Analyse-Engine"
-            subtitle={analyzer.available ? `Verbunden (${analyzer.id})` : 'Nicht konfiguriert'}
+            title="Akkorderkennung"
+            subtitle={analyzer.id === 'remote' ? 'Analyse-Dienst (Server)' : 'On-Device · offline · keine Uploads'}
           />
           <ListRow icon="information-circle-outline" title="Version" subtitle={Constants.expoConfig?.version ?? '–'} />
-          <ListRow icon="refresh-outline" title="Einstellungen zurücksetzen" onPress={settings.reset} />
+          <ListRow
+            icon="refresh-outline"
+            title="Einstellungen zurücksetzen"
+            subtitle="Notation, Vorzeichen und Haptik auf Standard"
+            onPress={async () => {
+              const ok = await confirm({ title: 'Einstellungen zurücksetzen?', confirmLabel: 'Zurücksetzen' });
+              if (ok) settings.reset();
+            }}
+          />
         </View>
       </GlassCard>
     </Screen>

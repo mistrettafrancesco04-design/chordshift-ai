@@ -4,71 +4,71 @@
 
 > **Nur Akkordsymbole werden verändert. Noten, Liedtexte und alle anderen Elemente bleiben pixelgenau erhalten.**
 
-Die App bearbeitet das Notenblatt nie als Ganzes. Stattdessen:
+Die App bearbeitet das Notenblatt nie als Ganzes:
 
-1. **Erfassen** – Foto (Kamera), Galerie oder Bilddatei → `SheetSource`
-2. **Erkennen** – ein `SheetAnalyzer` liefert nur Akkordsymbole + Bounding-Boxes (normiert 0–1) → `SheetAnalysis`
-3. **Validieren** – jede erkannte Zeichenkette muss den strengen Akkord-Parser bestehen, sonst wird sie verworfen
-4. **Transponieren** – reine TypeScript-Engine (`src/features/music`) berechnet neue Akkordtexte
-5. **Rendern** – `ChordOverlay` maskiert ausschließlich die Akkord-Boxen und schreibt den neuen Akkord hinein
+1. **Erfassen** – Kamera, Fotomediathek, PDF (pdf.js rendert jede Seite in 1800 px Breite) → `SheetSource` mit `pages[]`
+2. **Erkennen** – On-Device-OCR (Tesseract, gebündelt, offline) liefert Wörter mit Boxen
+3. **Filtern** – `extractChordsFromWords` behält nur *Akkordzeilen* (≥ 60 % gültige Akkorde, strenge Grammatik);
+   Liedtextzeilen wie „A - ma - zing grace“ werden verworfen, obwohl „A“ ein gültiger Akkord ist
+4. **Messen** – die Engine bestimmt pro Akkord Papierfarbe, Tintenfarbe, die **enge Tinten-Box** und den nachweislich
+   leeren Platz rechts daneben
+5. **Transponieren** – reine TypeScript-Engine (`src/features/music`)
+6. **Rendern** – `compose` übermalt ausschließlich die Tinten-Box (+1 px Kantenglättung) und – nur falls der neue
+   Akkord länger ist – leeres Papier rechts davon. Jedes andere Pixel wird 1:1 kopiert.
+
+Die Live-Vorschau (`ChordOverlay`) bildet denselben Algorithmus mit React-Native-Views nach; die Ansicht „Ergebnis“
+in der Vollbild-Vorschau zeigt das echte, von der Engine gerenderte Exportbild.
+
+## Bildverarbeitungs-Engine (`src/features/engine`)
+
+Eine unsichtbare WebView (Web: gleich-originiger iframe) führt `engine-runtime.ts` aus:
+
+| Operation   | Aufgabe                                                                 |
+| ----------- | ----------------------------------------------------------------------- |
+| `renderPdf` | PDF-Seiten → PNG (pdf.js)                                               |
+| `ocr`       | Notenlinien entfernen, Volltext-OCR + zeilenweise OCR (Tesseract, LSTM)  |
+| `measure`   | Papier-/Tintenfarbe, enge Tinten-Box, freier Platz; `grow` für manuell gezogene Boxen |
+| `compose`   | Endbild rendern – nur Akkordflächen werden neu gezeichnet               |
+
+Bibliotheken liegen als Binär-Assets in `assets/engine/*.bin` (Update: `npm run engine:sync`) und werden beim ersten
+Gebrauch in die WebView geladen. Alles funktioniert in **Expo Go** – es ist kein Development Build nötig.
 
 ## Ordnerstruktur
 
 ```
 src/
-├── app/                      Expo Router – jede Datei ist ein Screen
-│   ├── _layout.tsx           Root: Fonts, Splash, Theme, Stack
-│   ├── +not-found.tsx
-│   └── (tabs)/               Tab-Navigation (eigene NeonTabBar)
-│       ├── index.tsx         Home-Dashboard
-│       ├── library.tsx       Bibliothek
-│       ├── studio.tsx        Transposer Studio
-│       ├── lab.tsx           Chord Lab (Text-Transposer)
-│       └── settings.tsx      Optionen
-├── components/
-│   ├── ui/                   Design-System-Primitives (AppText, GlassCard, NeonButton …)
-│   ├── navigation/           NeonTabBar
-│   └── brand/                Logo
+├── app/                        Expo Router
+│   ├── _layout.tsx             Root: Fonts, Gesten, Engine-Host, Import-Overlay, Stack
+│   ├── (tabs)/                 Home · Meine Songs · Studio · Favoriten · Einstellungen
+│   ├── preview.tsx             Vollbild-Vorschau: Zoom, Live/Ergebnis/Original, Akkorde bearbeiten/markieren
+│   └── lab.tsx                 Chord Lab (Text-Transposer)
+├── components/                 Design-System (Glass, Neon, Animationen), Tab-Bar, Logo
 ├── features/
-│   ├── music/                Musiktheorie-Domäne – pure TS, keine RN-Imports, voll getestet
-│   ├── transposer/           Studio: Typen, Store, Services (Import, Speicher, Analyse), Komponenten
-│   ├── library/              Gespeicherte Projekte (persistiert)
-│   └── settings/             Benutzereinstellungen (persistiert)
-├── lib/                      Querschnitt: Haptics, Storage, IDs, Formatierung
-└── theme/                    Design-Tokens: Farben, Abstände, Typografie, Effekte
+│   ├── engine/                 Bildverarbeitung (WebView-Laufzeit + Client)
+│   ├── music/                  Musiktheorie – pure TS, voll getestet
+│   ├── transposer/             Studio: Store, Import, Analyse, Export, Komponenten
+│   ├── library/                Songs & Favoriten (persistiert, Migration v1→v2)
+│   ├── home/                   Dashboard-Komponenten
+│   └── settings/               Einstellungen (persistiert)
+├── lib/                        Haptik, Dialoge, Storage, Formatierung
+└── theme/                      Design-Tokens
 ```
-
-**Regeln**
-
-- `src/app/` enthält nur Screens; Logik lebt in `src/features/*`.
-- `src/features/music` hat keine Abhängigkeiten zu React/React Native → auf Server/Web wiederverwendbar.
-- Komponenten verwenden ausschließlich Tokens aus `src/theme` (keine Hex-Werte in Screens).
-- State: `zustand`. Persistente Stores (`settings`, `library`) über AsyncStorage; der Studio-Store ist Sitzungs-State.
 
 ## Musik-Engine (`src/features/music`)
 
-| Modul           | Aufgabe                                                                      |
-| --------------- | ---------------------------------------------------------------------------- |
-| `notes.ts`      | Tonhöhenklassen, Notennamen parsen/schreiben, internationale & deutsche Notation (H/B) |
-| `chord.ts`      | Strenge Akkord-Grammatik: Grundton, Suffix (unverändert), Bassnote; lehnt Wörter wie „Bob“, „Do“ ab |
-| `keys.ts`       | 24 Tonarten mit Vorzeichen-Schreibweise, Intervall zwischen Tonarten          |
-| `transpose.ts`  | Akkord transponieren, enharmonische Schreibweise nach Zieltonart, Text mit Akkordzeilen (Spalten bleiben ausgerichtet) |
-| `detect-key.ts` | Tonart-Schätzung aus einer Akkordfolge                                         |
+Dur, Moll, Septakkorde (7, maj7, m7, m7b5, dim7 …), Erweiterungen/Alterationen und Slash-Chords. Der Akkord-Suffix
+bleibt zeichengenau erhalten, nur Grundton und Bass werden verschoben. Die Schreibweise (Kreuz/Be) folgt der
+Zieltonart; deutsche Notation (H/B) für Ein- und Ausgabe.
 
-## Analyse-Engine austauschen
+## Optionaler Server-Analyzer
 
-Alle Engines implementieren `SheetAnalyzer` (`src/features/transposer/services/analysis/sheet-analyzer.ts`).
-`getSheetAnalyzer()` wählt die Engine. Aktuell vorhanden:
+Mit `EXPO_PUBLIC_ANALYZER_URL` wird statt der On-Device-Erkennung ein HTTP-Dienst verwendet
+(Vertrag: [ANALYZER_API.md](./ANALYZER_API.md)). Beide implementieren `SheetAnalyzer`.
 
-- `RemoteSheetAnalyzer` – HTTP-Dienst, aktiviert über `EXPO_PUBLIC_ANALYZER_URL` (Vertrag: [ANALYZER_API.md](./ANALYZER_API.md))
-- Fallback ohne Konfiguration – meldet „Analyse-Engine nicht verbunden“
+## Bekannte Grenzen / nächste Schritte
 
-Geplant: On-Device-Erkennung (ML Kit / Apple Vision) als zweite Implementierung – erfordert einen Development Build.
-
-## Roadmap (nächste Schritte)
-
-1. Akkorderkennung anbinden (Cloud-OCR + Akkord-Klassifikation, danach On-Device)
-2. Export: gerendertes Notenblatt als PNG/PDF teilen (`react-native-view-shot` / Print)
-3. PDF-Import (mehrseitig)
-4. Manuelle Korrektur einzelner Akkorde (Tippen auf Box)
-5. Deutsche Langnamen (Fis, Es, As …) im Parser
+- Handschriftliche Akkorde und stark perspektivisch verzerrte Fotos werden schlechter erkannt → Korrektur per
+  Antippen bzw. „Fehlenden Akkord markieren“ in der Vollbild-Vorschau
+- Perspektivkorrektur / Dokumentscanner für Kamerafotos
+- Deutsche Langnamen (Fis, Es, As …) im Parser
+- PDFs werden bis 12 Seiten importiert

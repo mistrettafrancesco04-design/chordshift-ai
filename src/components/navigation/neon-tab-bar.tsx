@@ -14,10 +14,10 @@ type IconName = ComponentProps<typeof Ionicons>['name'];
 /** Icon set per route name. Routes not listed here are hidden from the tab bar. */
 const TAB_ICONS: Record<string, { idle: IconName; active: IconName; featured?: boolean }> = {
   index: { idle: 'planet-outline', active: 'planet' },
-  library: { idle: 'albums-outline', active: 'albums' },
+  songs: { idle: 'albums-outline', active: 'albums' },
   studio: { idle: 'pulse-outline', active: 'pulse', featured: true },
-  lab: { idle: 'flask-outline', active: 'flask' },
-  settings: { idle: 'options-outline', active: 'options' },
+  favorites: { idle: 'star-outline', active: 'star' },
+  settings: { idle: 'settings-outline', active: 'settings' },
 };
 
 /** Floating glass tab bar with a raised neon "Studio" action in the centre. */
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
     gap: spacing.xxs,
   },
   label: {
-    fontSize: 11,
+    fontSize: 10,
   },
   indicator: {
     position: 'absolute',

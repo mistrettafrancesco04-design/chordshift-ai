@@ -24,18 +24,25 @@ Weitere Befehle:
 | `npm run lint`      | ESLint                                        |
 | `npm run validate`  | Typecheck + Lint + Tests                      |
 
-## Funktionen (Stand 0.1)
+## Funktionen (Stand 0.2)
 
-- **Home-Dashboard** – Import (Kamera / Galerie / Datei), Statistiken, zuletzt bearbeitete Projekte
-- **Transposer Studio** – Vorschau mit Akkord-Overlay (gedrückt halten = Original), Analyse-Pipeline,
-  Halbton-Stepper, Original- & Zieltonart, Kreuz/Be-Schreibweise, Speichern in der Bibliothek
-- **Chord Lab** – Akkorde-über-Text eingeben/einfügen und live transponieren
-- **Bibliothek** – gespeicherte Projekte (Bild wird dauerhaft im App-Speicher abgelegt)
-- **Optionen** – internationale (B) oder deutsche (H) Notation für Ein- und Ausgabe, Vorzeichen, Haptik
+- **Home-Dashboard** – animierter Hero, Import (Kamera / Fotos / PDF / Dateien), laufende Session, Statistiken,
+  zuletzt bearbeitete Songs und Favoriten
+- **Transposer Studio**
+  - Vorschau mit Live-Overlay, Original-Vergleich (gedrückt halten), Seitenleiste für mehrseitige PDFs
+  - **On-Device-Akkorderkennung** (offline, keine Uploads) mit Fortschrittsanzeige
+  - Tonartenkreis mit allen 12 Tonarten (Dur/Moll), Halbton-Stepper, Kreuz/Be-Schreibweise
+  - Vorschau aller Akkordänderungen („G → A ×3“)
+  - Vollbild-Vorschau mit Zoom: *Live*, *Ergebnis* (echtes Exportbild), *Original*, *Bearbeiten*
+    (Akkord korrigieren/entfernen, fehlenden Akkord markieren)
+  - Export: 1 Seite als PNG, mehrere Seiten als PDF (Teilen-Dialog)
+- **Meine Songs** – Suche, Sortierung, Favoriten-Stern, Löschen (lange drücken)
+- **Favoriten** – angeheftete Songs
+- **Chord Lab** – Akkorde-über-Text live transponieren
+- **Einstellungen** – Notation (B/H) für Ein- und Ausgabe, Vorzeichen, Haptik
 
-Die automatische **Akkorderkennung** wird über eine austauschbare Schnittstelle angebunden
-(`EXPO_PUBLIC_ANALYZER_URL`, siehe [docs/ANALYZER_API.md](docs/ANALYZER_API.md)). Ohne Konfiguration zeigt das Studio
-„Analyse-Engine nicht verbunden“ – alle anderen Funktionen arbeiten bereits vollständig.
+Die Bildverarbeitung ersetzt nur die Pixel innerhalb der erkannten Akkordfelder – siehe
+[Architektur](docs/ARCHITECTURE.md).
 
 ## Dokumentation
 

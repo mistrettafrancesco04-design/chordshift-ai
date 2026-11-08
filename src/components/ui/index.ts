@@ -10,3 +10,8 @@ export * from './screen';
 export * from './section-header';
 export * from './segmented-control';
 export * from './stat-tile';
+export * from './bottom-sheet';
+export * from './fade-in';
+export * from './pressable-scale';
+export * from './progress-bar';
+export * from './text-field';

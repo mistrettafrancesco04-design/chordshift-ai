@@ -7,12 +7,16 @@ export default function TabLayout() {
   return (
     <Tabs
       tabBar={(props) => <NeonTabBar {...props} />}
-      screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.background } }}>
+      screenOptions={{
+        headerShown: false,
+        animation: 'shift',
+        sceneStyle: { backgroundColor: colors.background },
+      }}>
       <Tabs.Screen name="index" options={{ title: 'Home' }} />
-      <Tabs.Screen name="library" options={{ title: 'Bibliothek' }} />
+      <Tabs.Screen name="songs" options={{ title: 'Meine Songs' }} />
       <Tabs.Screen name="studio" options={{ title: 'Studio' }} />
-      <Tabs.Screen name="lab" options={{ title: 'Chord Lab' }} />
-      <Tabs.Screen name="settings" options={{ title: 'Optionen' }} />
+      <Tabs.Screen name="favorites" options={{ title: 'Favoriten' }} />
+      <Tabs.Screen name="settings" options={{ title: 'Einstellungen' }} />
     </Tabs>
   );
 }
