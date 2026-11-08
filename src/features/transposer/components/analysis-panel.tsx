@@ -1,102 +1,67 @@
 import { Ionicons } from '@expo/vector-icons';
-import type { ComponentProps } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 
-import { AppText, GlassCard, NeonButton } from '@/components/ui';
+import { AppText, GlassCard, NeonButton, ProgressBar } from '@/components/ui';
 import { colors, radii, spacing } from '@/theme';
 
-import { useStudioStore } from '../studio-store';
-import type { TransposedChord } from '../types';
+import { selectChordCount, useStudioStore } from '../studio-store';
 
-type IconName = ComponentProps<typeof Ionicons>['name'];
-
-const STEPS: { label: string; icon: IconName }[] = [
-  { label: 'Bild', icon: 'image' },
-  { label: 'Akkorde finden', icon: 'scan' },
-  { label: 'Transponieren', icon: 'swap-vertical' },
-];
-
-/** Pipeline status + analysis trigger + list of detected chords. */
-export function AnalysisPanel({ chords }: { chords: TransposedChord[] }) {
+/** Chord recognition: start, progress, result summary and errors. */
+export function AnalysisPanel() {
   const status = useStudioStore((s) => s.status);
+  const progress = useStudioStore((s) => s.progress);
   const error = useStudioStore((s) => s.error);
-  const analyzerMissing = useStudioStore((s) => s.analyzerMissing);
+  const pageCount = useStudioStore((s) => s.source?.pages.length ?? 0);
+  const chordCount = useStudioStore(selectChordCount);
   const analyze = useStudioStore((s) => s.analyze);
   const cancel = useStudioStore((s) => s.cancelAnalysis);
 
-  const activeStep = status === 'analyzed' ? 2 : status === 'analyzing' ? 1 : 0;
-
   return (
-    <GlassCard>
+    <GlassCard active={status === 'analyzing'}>
       <View style={styles.stack}>
-        <View style={styles.steps}>
-          {STEPS.map((step, index) => {
-            const done = index < activeStep || (status === 'analyzed' && index <= activeStep);
-            const current = index === activeStep && status === 'analyzing';
-            const tint = done ? colors.success : current ? colors.primary : colors.textMuted;
-            return (
-              <View key={step.label} style={styles.step}>
-                <View style={[styles.stepIcon, { borderColor: tint }]}>
-                  {current ? (
-                    <ActivityIndicator size="small" color={tint} />
-                  ) : (
-                    <Ionicons name={done ? 'checkmark' : step.icon} size={16} color={tint} />
-                  )}
-                </View>
-                <AppText variant="caption" color={done ? 'success' : current ? 'primary' : 'textMuted'} align="center">
-                  {step.label}
-                </AppText>
-              </View>
-            );
-          })}
+        <View style={styles.header}>
+          <View style={[styles.icon, status === 'analyzed' && styles.iconDone]}>
+            <Ionicons
+              name={status === 'analyzed' ? 'checkmark' : status === 'error' ? 'alert' : 'scan'}
+              size={18}
+              color={status === 'analyzed' ? colors.success : status === 'error' ? colors.danger : colors.primary}
+            />
+          </View>
+          <View style={styles.headerText}>
+            <AppText variant="bodyStrong">
+              {status === 'analyzing'
+                ? 'Akkorde werden erkannt …'
+                : status === 'analyzed'
+                  ? `${chordCount} Akkorde erkannt`
+                  : status === 'error'
+                    ? 'Erkennung fehlgeschlagen'
+                    : 'Akkorde erkennen'}
+            </AppText>
+            <AppText variant="caption" color="textMuted">
+              {status === 'analyzed'
+                ? 'Tippe in der Vollbild-Vorschau auf einen Akkord, um ihn zu korrigieren.'
+                : status === 'error'
+                  ? error
+                  : `On-Device-Erkennung · ${pageCount} ${pageCount === 1 ? 'Seite' : 'Seiten'} · offline`}
+            </AppText>
+          </View>
         </View>
 
-        {status === 'error' && (
-          <View style={[styles.notice, analyzerMissing ? styles.noticeInfo : styles.noticeError]}>
-            <Ionicons
-              name={analyzerMissing ? 'construct-outline' : 'alert-circle-outline'}
-              size={18}
-              color={analyzerMissing ? colors.warning : colors.danger}
-            />
-            <View style={styles.noticeText}>
-              <AppText variant="bodyStrong">{analyzerMissing ? 'Analyse-Engine nicht verbunden' : error}</AppText>
-              <AppText variant="caption" color="textSecondary">
-                {analyzerMissing
-                  ? 'Die Akkorderkennung wird im nächsten Entwicklungsschritt angebunden (EXPO_PUBLIC_ANALYZER_URL). Bis dahin kannst du Tonart und Transposition bereits einstellen und Akkorde im Chord Lab testen.'
-                  : 'Bitte versuche es erneut oder verwende ein schärferes Foto mit gutem Licht.'}
-              </AppText>
-            </View>
-          </View>
-        )}
-
-        {status === 'analyzed' && (
-          <View style={styles.chordList}>
-            <AppText variant="label" color="textSecondary">
-              {chords.length} Akkorde erkannt
+        {status === 'analyzing' && progress && (
+          <Animated.View entering={FadeIn} style={styles.progress}>
+            <ProgressBar value={progress.value} />
+            <AppText variant="caption" color="textSecondary">
+              {progress.label}
             </AppText>
-            <View style={styles.chordWrap}>
-              {chords.slice(0, 40).map((c) => (
-                <View key={c.id} style={styles.chordPill}>
-                  <AppText variant="mono" color="textMuted">
-                    {c.original}
-                  </AppText>
-                  {c.transposed !== c.original && (
-                    <AppText variant="mono" color="primary">
-                      {' → '}
-                      {c.transposed}
-                    </AppText>
-                  )}
-                </View>
-              ))}
-            </View>
-          </View>
+          </Animated.View>
         )}
 
         {status === 'analyzing' ? (
           <NeonButton label="Abbrechen" variant="secondary" icon="close" onPress={cancel} fullWidth />
         ) : (
           <NeonButton
-            label={status === 'analyzed' ? 'Erneut analysieren' : 'Akkorde erkennen'}
+            label={status === 'analyzed' ? 'Erneut erkennen' : 'Akkorde erkennen'}
             icon="sparkles"
             variant={status === 'analyzed' ? 'secondary' : 'primary'}
             onPress={analyze}
@@ -112,55 +77,27 @@ const styles = StyleSheet.create({
   stack: {
     gap: spacing.lg,
   },
-  steps: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  step: {
-    flex: 1,
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  stepIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  notice: {
+  header: {
     flexDirection: 'row',
     gap: spacing.md,
-    padding: spacing.md,
-    borderRadius: radii.md,
-    borderWidth: 1,
+    alignItems: 'center',
   },
-  noticeInfo: {
-    backgroundColor: 'rgba(255,181,71,0.08)',
-    borderColor: 'rgba(255,181,71,0.3)',
-  },
-  noticeError: {
-    backgroundColor: 'rgba(255,77,109,0.08)',
-    borderColor: 'rgba(255,77,109,0.3)',
-  },
-  noticeText: {
+  headerText: {
     flex: 1,
     gap: spacing.xxs,
   },
-  chordList: {
-    gap: spacing.sm,
+  icon: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(34,228,255,0.1)',
   },
-  chordWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
+  iconDone: {
+    backgroundColor: 'rgba(61,255,168,0.1)',
   },
-  chordPill: {
-    flexDirection: 'row',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.sm,
-    backgroundColor: colors.surface,
+  progress: {
+    gap: spacing.sm,
   },
 });

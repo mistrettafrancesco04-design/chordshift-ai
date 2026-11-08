@@ -2,13 +2,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { AppText } from '@/components/ui';
+import { AppText, PressableScale } from '@/components/ui';
 import { formatKey, getKey, transposeKey } from '@/features/music';
 import { useSettingsStore } from '@/features/settings/settings-store';
 import { formatRelativeTime, formatSemitones } from '@/lib/format';
+import { haptics } from '@/lib/haptics';
 import { colors, radii, spacing } from '@/theme';
 
-import type { SheetProject } from './library-store';
+import { countChords, type SheetProject, useLibraryStore } from './library-store';
 
 interface ProjectCardProps {
   project: SheetProject;
@@ -18,43 +19,52 @@ interface ProjectCardProps {
 
 export function ProjectCard({ project, onPress, onLongPress }: ProjectCardProps) {
   const notation = useSettingsStore((s) => s.outputNotation);
+  const toggleFavorite = useLibraryStore((s) => s.toggleFavorite);
   const original = project.originalKeyId ? getKey(project.originalKeyId) : undefined;
   const target = original ? transposeKey(original, project.semitones) : undefined;
-  const chordCount = project.analysis?.chords.length ?? 0;
+  const pages = project.source.pages.length;
 
   return (
-    <Pressable
+    <PressableScale
       accessibilityRole="button"
-      accessibilityLabel={`Projekt ${project.title} öffnen`}
+      accessibilityLabel={`Song ${project.title} öffnen`}
       accessibilityHint={onLongPress ? 'Lange drücken für weitere Aktionen' : undefined}
       onPress={onPress}
       onLongPress={onLongPress}
-      style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
-      <Image source={{ uri: project.source.uri }} style={styles.thumb} contentFit="cover" />
+      pressedScale={0.98}
+      style={styles.card}>
+      <Image source={{ uri: project.source.pages[0]?.uri }} style={styles.thumb} contentFit="cover" />
       <View style={styles.body}>
         <AppText variant="bodyStrong" numberOfLines={1}>
           {project.title}
         </AppText>
-        <View style={styles.meta}>
-          {original && target ? (
-            <AppText variant="mono" color="primary">
-              {formatKey(original, notation)} → {formatKey(target, notation)}
-            </AppText>
-          ) : (
-            <AppText variant="mono" color="primary">
-              {formatSemitones(project.semitones)}
-            </AppText>
-          )}
-          <AppText variant="caption" color="textMuted">
-            · {chordCount} Akkorde
-          </AppText>
-        </View>
-        <AppText variant="caption" color="textMuted">
+        <AppText variant="mono" color="primary">
+          {original && target
+            ? `${formatKey(original, notation)} → ${formatKey(target, notation)}`
+            : formatSemitones(project.semitones)}
+        </AppText>
+        <AppText variant="caption" color="textMuted" numberOfLines={1}>
+          {countChords(project)} Akkorde · {pages} {pages === 1 ? 'Seite' : 'Seiten'} ·{' '}
           {formatRelativeTime(project.updatedAt)}
         </AppText>
       </View>
-      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-    </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={project.favorite ? 'Aus Favoriten entfernen' : 'Zu Favoriten hinzufügen'}
+        accessibilityState={{ selected: project.favorite }}
+        hitSlop={10}
+        onPress={() => {
+          haptics.light();
+          toggleFavorite(project.id);
+        }}
+        style={styles.star}>
+        <Ionicons
+          name={project.favorite ? 'star' : 'star-outline'}
+          size={22}
+          color={project.favorite ? colors.warning : colors.textMuted}
+        />
+      </Pressable>
+    </PressableScale>
   );
 }
 
@@ -69,9 +79,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  pressed: {
-    backgroundColor: colors.surfacePressed,
-  },
   thumb: {
     width: 56,
     height: 72,
@@ -82,9 +89,10 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: spacing.xxs,
   },
-  meta: {
-    flexDirection: 'row',
+  star: {
+    width: 44,
+    height: 44,
     alignItems: 'center',
-    gap: spacing.xs,
+    justifyContent: 'center',
   },
 });

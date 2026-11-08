@@ -1,4 +1,9 @@
-import type { SheetAnalysis, SheetSource } from '../../types';
+import type { AnalysisProgress, SheetAnalysis, SheetPage } from '../../types';
+
+export interface AnalyzeOptions {
+  signal?: AbortSignal;
+  onProgress?: (progress: AnalysisProgress) => void;
+}
 
 /**
  * Contract for every chord-recognition engine (cloud OCR, on-device ML, …).
@@ -11,7 +16,8 @@ export interface SheetAnalyzer {
   readonly id: string;
   /** Whether the analyzer is configured and can be used. */
   readonly available: boolean;
-  analyze(source: SheetSource, options?: { signal?: AbortSignal }): Promise<SheetAnalysis>;
+  /** Analyses one page. */
+  analyze(page: SheetPage, options?: AnalyzeOptions): Promise<SheetAnalysis>;
 }
 
 export class AnalyzerUnavailableError extends Error {

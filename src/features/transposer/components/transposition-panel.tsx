@@ -1,12 +1,14 @@
+import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { AppText, GlassCard, SegmentedControl } from '@/components/ui';
-import { type AccidentalPreference, formatKey } from '@/features/music';
+import { type AccidentalPreference, findKey, formatKey, type KeyMode } from '@/features/music';
 import { useSettingsStore } from '@/features/settings/settings-store';
+import { formatSemitones } from '@/lib/format';
 import { spacing } from '@/theme';
 
 import { selectOriginalKey, selectTargetKey, useStudioStore } from '../studio-store';
-import { KeySelector } from './key-selector';
+import { KeyWheel } from './key-wheel';
 import { SemitoneStepper } from './semitone-stepper';
 
 const ACCIDENTAL_OPTIONS = [
@@ -15,11 +17,12 @@ const ACCIDENTAL_OPTIONS = [
   { value: 'flats', label: 'Be (b)' },
 ] as const satisfies readonly { value: AccidentalPreference; label: string }[];
 
-/** Semitone stepper, original/target key and accidental preference. */
+type WheelTarget = 'target' | 'original';
+
+/** Semitone stepper, circle-of-fifths key wheel (original & target) and accidentals. */
 export function TranspositionPanel() {
   const semitones = useStudioStore((s) => s.semitones);
   const shiftSemitones = useStudioStore((s) => s.shiftSemitones);
-  const setSemitones = useStudioStore((s) => s.setSemitones);
   const setOriginalKey = useStudioStore((s) => s.setOriginalKey);
   const setTargetKey = useStudioStore((s) => s.setTargetKey);
   const originalKey = useStudioStore(selectOriginalKey);
@@ -29,32 +32,81 @@ export function TranspositionPanel() {
   const accidentals = useSettingsStore((s) => s.accidentals);
   const setAccidentals = useSettingsStore((s) => s.setAccidentals);
 
+  // null = automatic: edit the original key until one is known, then the target key.
+  const [editing, setEditing] = useState<WheelTarget | null>(null);
+  const [modeChoice, setOriginalMode] = useState<KeyMode | null>(null);
+  const originalMode: KeyMode = modeChoice ?? originalKey?.mode ?? 'major';
+  const wheelTarget: WheelTarget = originalKey ? (editing ?? 'target') : 'original';
+  const mode = wheelTarget === 'original' ? originalMode : (originalKey?.mode ?? 'major');
+
   return (
     <GlassCard active={semitones !== 0}>
       <View style={styles.stack}>
+        <AppText variant="overline" color="primary">
+          Transposition
+        </AppText>
         <SemitoneStepper value={semitones} onShift={shiftSemitones} />
 
-        {originalKey && targetKey && (
-          <View style={styles.keyFlow}>
-            <AppText variant="mono" color="textSecondary">
-              {formatKey(originalKey, notation)}
-            </AppText>
-            <AppText variant="label" color="textMuted">
-              →
-            </AppText>
-            <AppText variant="mono" color="primary">
-              {formatKey(targetKey, notation)}
-            </AppText>
-            {semitones !== 0 && (
-              <AppText variant="label" color="primary" onPress={() => setSemitones(0)} accessibilityRole="button">
-                Zurücksetzen
-              </AppText>
-            )}
-          </View>
+        <SegmentedControl
+          accessibilityLabel="Welche Tonart wählst du im Kreis?"
+          value={wheelTarget}
+          onChange={setEditing}
+          options={[
+            { value: 'target', label: 'Zieltonart' },
+            { value: 'original', label: 'Originaltonart' },
+          ]}
+        />
+
+        {wheelTarget === 'original' && (
+          <SegmentedControl
+            accessibilityLabel="Tongeschlecht der Originaltonart"
+            value={originalMode}
+            onChange={(next) => {
+              setOriginalMode(next);
+              if (originalKey && originalKey.mode !== next) {
+                // Switch to the relative key (same signature): C ↔ Am.
+                setOriginalKey(findKey(originalKey.tonic + (next === 'minor' ? 9 : 3), next).id);
+              }
+            }}
+            options={[
+              { value: 'major', label: 'Dur' },
+              { value: 'minor', label: 'Moll' },
+            ]}
+          />
         )}
 
-        <KeySelector label="Originaltonart" value={originalKey} onChange={setOriginalKey} notation={notation} />
-        <KeySelector label="Zieltonart" value={targetKey} onChange={setTargetKey} notation={notation} />
+        <KeyWheel
+          mode={mode}
+          notation={notation}
+          original={originalKey}
+          selected={wheelTarget === 'original' ? originalKey : targetKey}
+          onSelect={(key) => {
+            if (wheelTarget === 'original') {
+              setOriginalKey(key.id);
+              setEditing('target');
+            } else {
+              setTargetKey(key.id);
+            }
+          }}
+          centerTitle={
+            wheelTarget === 'original'
+              ? (originalKey ? formatKey(originalKey, notation) : '?')
+              : (targetKey ? formatKey(targetKey, notation) : '?')
+          }
+          centerSubtitle={
+            !originalKey
+              ? 'Originaltonart wählen'
+              : wheelTarget === 'original'
+                ? 'Originaltonart'
+                : `aus ${formatKey(originalKey, notation)} · ${formatSemitones(semitones)}`
+          }
+        />
+
+        {!originalKey && (
+          <AppText variant="caption" color="textMuted" align="center">
+            Die Tonart wird nach der Akkorderkennung automatisch bestimmt. Du kannst sie hier auch selbst festlegen.
+          </AppText>
+        )}
 
         <View style={styles.accidentals}>
           <AppText variant="label" color="textSecondary">
@@ -74,13 +126,7 @@ export function TranspositionPanel() {
 
 const styles = StyleSheet.create({
   stack: {
-    gap: spacing.xl,
-  },
-  keyFlow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.md,
+    gap: spacing.lg,
   },
   accidentals: {
     gap: spacing.sm,

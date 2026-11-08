@@ -19,14 +19,37 @@ export interface TranspositionSettings {
   accidentals: AccidentalPreference;
 }
 
-/** Key detected on a sheet: analyzer result first, local estimate as fallback. */
-export function resolveOriginalKey(analysis: SheetAnalysis, notation: Notation): MusicalKey | null {
-  const fromAnalyzer = analysis.detectedKey ? getKey(analysis.detectedKey) : undefined;
-  if (fromAnalyzer) return fromAnalyzer;
-  return detectKey(
-    analysis.chords.map((c) => c.text),
-    notation,
-  )?.key ?? null;
+/**
+ * Key of a sheet: analyzer result first, otherwise estimated from all chords of all
+ * pages (in reading order).
+ */
+export function resolveOriginalKey(
+  analyses: (SheetAnalysis | null)[],
+  notation: Notation,
+): MusicalKey | null {
+  for (const analysis of analyses) {
+    const fromAnalyzer = analysis?.detectedKey ? getKey(analysis.detectedKey) : undefined;
+    if (fromAnalyzer) return fromAnalyzer;
+  }
+  const chords = analyses.flatMap((a) => a?.chords.map((c) => c.text) ?? []);
+  return detectKey(chords, notation)?.key ?? null;
+}
+
+/** Unique chord changes in order of first appearance, e.g. G → A (×4). */
+export interface ChordChange {
+  original: string;
+  transposed: string;
+  count: number;
+}
+
+export function summarizeChanges(chords: TransposedChord[]): ChordChange[] {
+  const map = new Map<string, ChordChange>();
+  for (const chord of chords) {
+    const existing = map.get(chord.original);
+    if (existing) existing.count += 1;
+    else map.set(chord.original, { original: chord.original, transposed: chord.transposed, count: 1 });
+  }
+  return [...map.values()];
 }
 
 /**
@@ -52,6 +75,7 @@ export function transposeAnalysis(analysis: SheetAnalysis, settings: Transpositi
       transposed,
       box: annotation.box,
       confidence: annotation.confidence,
+      appearance: annotation.appearance,
     };
   });
 }

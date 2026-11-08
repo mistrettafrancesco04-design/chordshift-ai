@@ -1,8 +1,8 @@
 import type { Notation } from '@/features/music';
 
-import type { SheetAnalysis, SheetSource } from '../../types';
+import type { SheetAnalysis, SheetPage } from '../../types';
 import { parseAnalysisResponse } from './parse-response';
-import { AnalyzerResponseError, type SheetAnalyzer } from './sheet-analyzer';
+import { type AnalyzeOptions, AnalyzerResponseError, type SheetAnalyzer } from './sheet-analyzer';
 
 /**
  * Sends the sheet image to an HTTP analysis service (`POST {baseUrl}/v1/analyze`,
@@ -18,17 +18,19 @@ export class RemoteSheetAnalyzer implements SheetAnalyzer {
     private readonly notation: Notation = 'international',
   ) {}
 
-  async analyze(source: SheetSource, options?: { signal?: AbortSignal }): Promise<SheetAnalysis> {
+  async analyze(page: SheetPage, options?: AnalyzeOptions): Promise<SheetAnalysis> {
     const started = Date.now();
     const body = new FormData();
     // React Native's FormData accepts file descriptors of this shape.
+    const isPng = page.uri.toLowerCase().split('?')[0].endsWith('.png');
     body.append('image', {
-      uri: source.uri,
-      name: source.fileName ?? 'sheet.jpg',
-      type: source.mimeType ?? 'image/jpeg',
+      uri: page.uri,
+      name: isPng ? 'sheet.png' : 'sheet.jpg',
+      type: isPng ? 'image/png' : 'image/jpeg',
     } as unknown as Blob);
-    body.append('width', String(source.width));
-    body.append('height', String(source.height));
+    body.append('width', String(page.width));
+    body.append('height', String(page.height));
+    options?.onProgress?.({ value: 0.3, label: 'Wird an Analyse-Dienst gesendet' });
 
     const response = await fetch(`${this.baseUrl.replace(/\/$/, '')}/v1/analyze`, {
       method: 'POST',
