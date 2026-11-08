@@ -48,7 +48,9 @@
           "cameraPermission": "CHORDSHIFT AI benötigt die Kamera, um Notenblätter zu fotografieren.",
           "microphonePermission": false
         }
-      ]
+      ],
+      "expo-sharing",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,
