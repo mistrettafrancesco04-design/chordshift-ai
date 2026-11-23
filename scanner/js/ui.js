@@ -42,7 +42,7 @@ export function newId() {
 export function createQueue(onBusyChange = () => {}) {
   let chain = Promise.resolve();
   let pending = 0;
-  return (job) => {
+  const enqueue = (job) => {
     pending++;
     onBusyChange(true);
     const run = chain.then(job).finally(() => {
@@ -52,6 +52,8 @@ export function createQueue(onBusyChange = () => {}) {
     chain = run.catch(() => {});
     return run;
   };
+  Object.defineProperty(enqueue, 'pending', { get: () => pending });
+  return enqueue;
 }
 
 /** Cross-screen state, e.g. which page the camera should replace on "Neu aufnehmen". */

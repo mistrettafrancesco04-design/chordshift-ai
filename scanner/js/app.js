@@ -5,7 +5,7 @@ import {
   smoothQuad, createStabilityTracker, scaleQuad, fullFrameQuad, quadDistance,
 } from './geometry.js';
 import { startCamera, stopCamera, grabFrame, torchSupported, setTorch, CameraError } from './camera.js';
-import { blobToCanvas, canvasToBlob, renderFromCanvas } from './enhance.js';
+import { blobToCanvas, canvasToBlob, renderFromCanvas, releaseCanvas } from './enhance.js';
 import { listPages, putPage } from './store.js';
 import { $, showScreen, currentScreen, onScreenChange, toast, newId, createQueue, session } from './ui.js';
 import { initReview, openReview } from './review.js';
@@ -15,6 +15,7 @@ const DETECT_INTERVAL_MS = 120;
 const DETECT_LONG_SIDE = 480;
 const STABLE_MS = 1000;
 const RING_LENGTH = 226.2;
+const MAX_PENDING_CAPTURES = 2;
 
 const video = $('video');
 const state = {
@@ -77,7 +78,9 @@ function renderOverlay(progress) {
   poly.classList.toggle('locked', progress > 0.5);
   $('ringProgress').style.strokeDashoffset = String(RING_LENGTH * (1 - progress));
 
-  if (!state.quad) setHint('Halte die Kamera über das Dokument');
+  if (session.retakeId && !state.quad) setHint('Neu aufnehmen: Dokument ins Bild halten');
+  else if (session.retakeId) setHint('Neu aufnehmen: Seite wird ersetzt');
+  else if (!state.quad) setHint('Halte die Kamera über das Dokument');
   else if (!state.auto) setHint('Dokument erkannt');
   else if (!state.armed) setHint('Aufgenommen – nächste Seite hinlegen');
   else setHint('Ruhig halten…');
@@ -136,13 +139,12 @@ function flash() {
   f.classList.add('on');
 }
 
-async function addPageFromCanvas(canvas, quadHint) {
+async function addPageFromCanvas(canvas, quadHint, replaceId = null) {
   const refined = detectOn(canvas, canvas.width, canvas.height, 640);
   const quad = refined || quadHint || fullFrameQuad(canvas.width, canvas.height);
   const original = await canvasToBlob(canvas, 'image/jpeg', 0.92);
   const r = await renderFromCanvas(state.cv, canvas, quad, 0, 'auto');
-  const replaceId = session.retakeId;
-  session.retakeId = null;
+  releaseCanvas(canvas);
   const page = {
     id: replaceId || newId(), original, quad, rotation: 0, filter: 'auto',
     processed: r.blob, width: r.width, height: r.height, createdAt: Date.now(),
@@ -155,17 +157,24 @@ async function addPageFromCanvas(canvas, quadHint) {
 
 function capture(isAuto = false) {
   if (!state.cv || !video.videoWidth) return;
+  if (enqueue.pending >= MAX_PENDING_CAPTURES) {
+    toast('Einen Moment – die letzte Seite wird noch verarbeitet.', 1500);
+    return;
+  }
   flash();
   navigator.vibrate?.(30);
   const frame = grabFrame(video);
   const quadAtShot = state.quad;
+  const replaceId = session.retakeId;
+  session.retakeId = null;
   if (isAuto) {
     state.armed = false;
     state.lastShotQuad = state.quad;
     state.tracker?.reset();
   }
-  enqueue(() => addPageFromCanvas(frame, quadAtShot)).catch((e) => {
+  enqueue(() => addPageFromCanvas(frame, quadAtShot, replaceId)).catch((e) => {
     console.error(e);
+    releaseCanvas(frame);
     toast('Die Seite konnte nicht verarbeitet werden.');
   });
 }
@@ -173,6 +182,7 @@ function capture(isAuto = false) {
 /* ---------- gallery import ---------- */
 
 async function importFiles(files) {
+  session.retakeId = null;
   const added = [];
   for (const file of files) {
     try {
@@ -239,7 +249,15 @@ function bindCamera() {
     } else if (currentScreen() === 'camera') startLive();
   });
   onScreenChange((name) => {
-    if (name === 'camera') {
+    if (name !== 'camera') {
+      // Leaving the camera: free the stream (battery, heat, memory) and drop a pending retake.
+      session.retakeId = null;
+      stopCamera();
+      video.srcObject = null;
+      state.quad = null;
+      renderOverlay(0);
+      $('torchBtn').setAttribute('aria-pressed', 'false');
+    } else {
       state.quad = null;
       state.armed = true;
       state.tracker?.reset();

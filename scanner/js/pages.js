@@ -20,9 +20,11 @@ function cleanName(raw) {
   return name;
 }
 
+let nameEdited = false;
+
 async function loadFileName() {
   const saved = await getMeta('fileName');
-  $('fileName').value = saved || defaultFileName(new Date());
+  if (!nameEdited) $('fileName').value = saved || defaultFileName(new Date());
 }
 
 /* ---------- PDF (pre-built so iOS share runs inside the tap) ---------- */
@@ -37,7 +39,9 @@ function prepPdf() {
   if (pdfCache.key !== key) {
     const title = cleanName($('fileName').value).replace(/\.pdf$/i, '');
     const promise = buildPdf(pages.map((p) => ({ blob: p.processed, width: p.width, height: p.height })), title);
-    promise.catch(() => {});
+    promise.catch(() => {
+      if (pdfCache.promise === promise) pdfCache = { key: '', promise: null, value: null };
+    });
     pdfCache = { key, promise, value: null };
     promise.then((v) => {
       if (pdfCache.promise === promise) pdfCache.value = v;
@@ -61,14 +65,16 @@ async function share() {
   if (!pages.length) return;
   const name = cleanName($('fileName').value);
   $('fileName').value = name;
-  await setMeta('fileName', name);
+  setMeta('fileName', name); // not awaited: iOS only allows share() shortly after the tap
   const cache = prepPdf();
   const btn = $('shareBtn');
-  btn.disabled = true;
-  btn.textContent = 'PDF wird erstellt…';
-  let blob;
+  let blob = cache.value;
+  if (!blob) {
+    btn.disabled = true;
+    btn.textContent = 'PDF wird erstellt…';
+  }
   try {
-    blob = cache.value || (await cache.promise);
+    blob = blob || (await cache.promise);
   } catch (e) {
     console.error(e);
     toast('Das PDF konnte nicht erstellt werden.');
@@ -170,7 +176,9 @@ function bindThumb(thumb, index, id) {
     target = -1;
     timer = setTimeout(() => {
       dragging = true;
-      thumb.setPointerCapture?.(e.pointerId);
+      try {
+        thumb.setPointerCapture?.(e.pointerId);
+      } catch {}
       thumb.closest('.page-item').classList.add('dragging');
       navigator.vibrate?.(20);
     }, LONG_PRESS_MS);
@@ -216,6 +224,10 @@ function bindThumb(thumb, index, id) {
     clearMarks();
   });
   thumb.addEventListener('contextmenu', (e) => e.preventDefault());
+  // iOS scrolls (and cancels the pointer) unless touchmove is blocked while dragging.
+  thumb.addEventListener('touchmove', (e) => {
+    if (dragging) e.preventDefault();
+  }, { passive: false });
 }
 
 /* ---------- bindings ---------- */
@@ -228,6 +240,7 @@ export function initPages() {
   });
   onScreenChange(async (name) => {
     if (name !== 'pages') return;
+    nameEdited = false;
     pages = await listPages();
     render();
     if (!pages.length) return;
@@ -239,6 +252,15 @@ export function initPages() {
     if (await confirmDialog('Alle Seiten löschen?', 'Alle löschen')) await resetSession();
   });
   $('shareBtn').addEventListener('click', share);
+  let nameTimer = 0;
+  $('fileName').addEventListener('input', () => {
+    nameEdited = true;
+    clearTimeout(nameTimer);
+    nameTimer = setTimeout(() => {
+      setMeta('fileName', cleanName($('fileName').value));
+      prepPdf();
+    }, 400);
+  });
   $('fileName').addEventListener('change', () => {
     const name = cleanName($('fileName').value);
     $('fileName').value = name;

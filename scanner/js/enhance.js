@@ -18,6 +18,11 @@ export async function blobToCanvas(blob, maxLong = Infinity) {
   return c;
 }
 
+/** Frees a canvas' pixel memory right away (iOS Safari has a tight total canvas budget). */
+export function releaseCanvas(canvas) {
+  if (canvas) canvas.width = canvas.height = 0;
+}
+
 export function canvasToBlob(canvas, type = 'image/jpeg', quality = 0.85) {
   return new Promise((ok, fail) => canvas.toBlob((b) => (b ? ok(b) : fail(new Error('toBlob failed'))), type, quality));
 }
@@ -159,11 +164,19 @@ export function applyFilter(cv, canvas, filter) {
 export async function renderFromCanvas(cv, source, quad, rotation, filter) {
   const flat = warpQuad(cv, source, quad, rotation);
   const out = applyFilter(cv, flat, filter);
+  releaseCanvas(flat);
   const blob = await canvasToBlob(out, 'image/jpeg', 0.85);
-  return { blob, width: out.width, height: out.height };
+  const result = { blob, width: out.width, height: out.height };
+  releaseCanvas(out);
+  return result;
 }
 
 /** Full pipeline for one page: decode, flatten, rotate, filter, encode JPEG. */
 export async function renderPage(cv, sourceBlob, quad, rotation, filter) {
-  return renderFromCanvas(cv, await blobToCanvas(sourceBlob), quad, rotation, filter);
+  const src = await blobToCanvas(sourceBlob);
+  try {
+    return await renderFromCanvas(cv, src, quad, rotation, filter);
+  } finally {
+    releaseCanvas(src);
+  }
 }

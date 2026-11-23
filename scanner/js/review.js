@@ -1,7 +1,7 @@
 // "Seite prüfen": drag corners (with loupe), rotate, choose filter, retake or delete a page.
 import { loadCv } from './cv.js';
 import { orderCorners, fullFrameQuad } from './geometry.js';
-import { blobToCanvas, warpQuad, applyFilter, renderFromCanvas, canvasToBlob } from './enhance.js';
+import { blobToCanvas, warpQuad, applyFilter, renderFromCanvas, canvasToBlob, releaseCanvas } from './enhance.js';
 import { listPages, putPage, deletePage } from './store.js';
 import { $, showScreen, confirmDialog, toast, session } from './ui.js';
 
@@ -173,7 +173,10 @@ async function updatePreviews() {
     const url = URL.createObjectURL(await canvasToBlob(out, 'image/jpeg', 0.8));
     ed.previewUrls.push(url);
     btn.querySelector('img').src = url;
+    releaseCanvas(out);
   }
+  releaseCanvas(flat);
+  releaseCanvas(small);
 }
 
 /* ---------- open / save ---------- */
@@ -228,6 +231,7 @@ async function save() {
 }
 
 function close() {
+  releaseCanvas(ed.full);
   ed.full = null;
   showScreen('pages');
 }
@@ -260,9 +264,12 @@ export function initReview() {
     schedulePreviews();
   });
   $('retakeBtn').addEventListener('click', () => {
-    session.retakeId = ed.page.id;
-    toast('Nimm die Seite neu auf.');
+    const id = ed.page.id;
+    releaseCanvas(ed.full);
+    ed.full = null;
     showScreen('camera');
+    session.retakeId = id; // set after the switch: leaving any screen for the camera keeps it
+    toast('Nimm die Seite neu auf.');
   });
   $('deleteBtn').addEventListener('click', async () => {
     if (!(await confirmDialog('Diese Seite löschen?', 'Löschen'))) return;

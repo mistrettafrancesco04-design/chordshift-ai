@@ -455,3 +455,4 @@ svg { display: block; }
 .dialog-actions { display: flex; justify-content: space-around; }
 .thumb-btn:disabled .badge { display: none; }
 .thumb-btn:disabled { opacity: 0.35; }
+.page-thumb, .page-thumb img { -webkit-touch-callout: none; }
