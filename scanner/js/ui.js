@@ -53,3 +53,6 @@ export function createQueue(onBusyChange = () => {}) {
     return run;
   };
 }
+
+/** Cross-screen state, e.g. which page the camera should replace on "Neu aufnehmen". */
+export const session = { retakeId: null };

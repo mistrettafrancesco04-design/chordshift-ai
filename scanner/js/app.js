@@ -7,7 +7,9 @@ import {
 import { startCamera, stopCamera, grabFrame, torchSupported, setTorch, CameraError } from './camera.js';
 import { blobToCanvas, canvasToBlob, renderFromCanvas } from './enhance.js';
 import { listPages, putPage } from './store.js';
-import { $, showScreen, currentScreen, onScreenChange, toast, newId, createQueue } from './ui.js';
+import { $, showScreen, currentScreen, onScreenChange, toast, newId, createQueue, session } from './ui.js';
+import { initReview, openReview } from './review.js';
+import { initPages } from './pages.js';
 
 const DETECT_INTERVAL_MS = 120;
 const DETECT_LONG_SIDE = 480;
@@ -139,12 +141,15 @@ async function addPageFromCanvas(canvas, quadHint) {
   const quad = refined || quadHint || fullFrameQuad(canvas.width, canvas.height);
   const original = await canvasToBlob(canvas, 'image/jpeg', 0.92);
   const r = await renderFromCanvas(state.cv, canvas, quad, 0, 'auto');
+  const replaceId = session.retakeId;
+  session.retakeId = null;
   const page = {
-    id: newId(), original, quad, rotation: 0, filter: 'auto',
+    id: replaceId || newId(), original, quad, rotation: 0, filter: 'auto',
     processed: r.blob, width: r.width, height: r.height, createdAt: Date.now(),
   };
   await putPage(page);
   await refreshPages();
+  if (replaceId) openReview(page.id);
   return page;
 }
 
@@ -247,6 +252,9 @@ function bindCamera() {
 
 async function boot() {
   bindCamera();
+  initReview();
+  initPages();
+  document.addEventListener('pages-dirty', () => refreshPages());
   const camera = startLive();
   await refreshPages();
   try {
