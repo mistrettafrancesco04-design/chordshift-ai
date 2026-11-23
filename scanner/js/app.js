@@ -269,4 +269,8 @@ async function boot() {
   window.dispatchEvent(new CustomEvent('scanner-ready', { detail: { cv: state.cv } }));
 }
 
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch((e) => console.warn('Service Worker:', e));
+}
+
 boot();
