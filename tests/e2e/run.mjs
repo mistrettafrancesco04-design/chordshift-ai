@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { startServer } from './server.mjs';
+import { ensureVideo } from '../fixtures/make-video.mjs';
 
 const { chromium } = createRequire(import.meta.url)('playwright');
 
@@ -13,7 +14,8 @@ const specs = readdirSync(dir).filter((f) => f.endsWith('.spec.mjs') && (!only |
 
 const server = await startServer('scanner');
 const args = ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'];
-if (process.env.FAKE_VIDEO) args.push(`--use-file-for-fake-video-capture=${resolve(process.env.FAKE_VIDEO)}`);
+const video = process.env.FAKE_VIDEO || (await ensureVideo());
+args.push(`--use-file-for-fake-video-capture=${resolve(video)}`);
 const browser = await chromium.launch({ args });
 
 let failed = 0;

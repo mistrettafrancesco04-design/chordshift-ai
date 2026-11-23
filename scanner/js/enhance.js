@@ -155,11 +155,15 @@ export function applyFilter(cv, canvas, filter) {
   }
 }
 
-/** Full pipeline for one page: decode, flatten, rotate, filter, encode JPEG. */
-export async function renderPage(cv, sourceBlob, quad, rotation, filter) {
-  const src = await blobToCanvas(sourceBlob);
-  const flat = warpQuad(cv, src, quad, rotation);
+/** Flatten, rotate, filter and encode a page from an already decoded canvas. */
+export async function renderFromCanvas(cv, source, quad, rotation, filter) {
+  const flat = warpQuad(cv, source, quad, rotation);
   const out = applyFilter(cv, flat, filter);
   const blob = await canvasToBlob(out, 'image/jpeg', 0.85);
   return { blob, width: out.width, height: out.height };
+}
+
+/** Full pipeline for one page: decode, flatten, rotate, filter, encode JPEG. */
+export async function renderPage(cv, sourceBlob, quad, rotation, filter) {
+  return renderFromCanvas(cv, await blobToCanvas(sourceBlob), quad, rotation, filter);
 }
